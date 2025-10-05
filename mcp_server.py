@@ -374,8 +374,8 @@ def explain(
             )
         else:
             txt = (
-                f"{symbol}: last close ${last:.2f}. Versus moving averages: {dir_sma} the SMA (${sma:.2f}), {dir_ema} the EMA (${ema:.2f}). "
-                f"RSI suggests {rsi_note} ({rsi:.1f}). Session events: {ev_text}. This is not investment advice."
+                symbol + ": last close $" + f"{last:.2f}" + ". Versus moving averages: " + dir_sma + " the SMA ($" + f"{sma:.2f}" + "), " + dir_ema + " the EMA ($" + f"{ema:.2f}" + "). "
+                "RSI suggests " + rsi_note + " (" + f"{rsi:.1f}" + "). Session events: " + ev_text + ". This is not investment advice."
             )
 
         out = {
