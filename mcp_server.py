@@ -202,7 +202,6 @@ def price_series(symbol: str, interval: str = "daily", lookback: int = 180) -> s
                 df[col] = pd.Series(dtype="float64" if col != "date" else "datetime64[ns]")
         return df.to_json(orient="records", date_format="iso")
     except Exception as e:
-        # <— include message so the UI shows it
         return json.dumps({"symbol": symbol, "error": "series_failed", "message": str(e)})
 
 @mcp.tool()
@@ -212,12 +211,12 @@ def indicators(
     window_ema: int = 50,
     window_rsi: int = 14,
 ) -> str:
-    """SMA/EMA/RSI and last snapshot. Returns a JSON object; never raises."""
+    """SMA/EMA/RSI and last snapshot. Returns a JSON object."""
     try:
         df = ds_series(symbol, "daily", 300)
         close = _coerce_close(df)
         if close.empty:
-            return json.dumps({"symbol": symbol, "error": "no_data"})
+            return json.dumps({"symbol": symbol, "error": "no_data", "message": f"No data available for symbol {symbol}"})
         sma = calc_sma(close, window_sma).iloc[-1]
         ema = calc_ema(close, window_ema).iloc[-1]
         rsi = calc_rsi(close, window_rsi).iloc[-1]
@@ -234,18 +233,18 @@ def indicators(
 
 @mcp.tool()
 def detect_events(symbol: str) -> str:
-    """Gap up/down, volatility spikes, 52w extremes on the last bar. Returns a JSON object; never raises."""
+    """Gap up/down, volatility spikes, 52w extremes on the last bar. Returns a JSON object."""
     try:
         df = ds_series(symbol, "daily", 400)
         if df is None or df.empty:
-            return json.dumps({"symbol": symbol, "error": "no_data"})
+            return json.dumps({"symbol": symbol, "error": "no_data", "message": f"No data available for symbol {symbol}"})
         # ensure numeric
         for c in ["open", "high", "low", "close", "volume"]:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors="coerce")
         df = df.dropna(subset=["open", "close"]).reset_index(drop=True)
         if df.empty:
-            return json.dumps({"symbol": symbol, "error": "no_data"})
+            return json.dumps({"symbol": symbol, "error": "no_data", "message": f"No valid data available for symbol {symbol}"})
 
         df = flag_gaps(df)
         df = flag_volatility(df)
@@ -273,11 +272,11 @@ def explain(
     risk_profile: str = "balanced",
     horizon_days: int = 30,
     bullets: bool = True,
+    openai_api_key: str = "",
 ) -> str:
     """
     LLM explanation of the current technical snapshot with guardrails.
     Returns a JSON object: {"text": "...", "rationale": [...], "disclaimers": "..."}.
-    Never raises. Falls back to a templated narrative if no OPENAI_API_KEY.
     """
     import json as _json
 
@@ -287,64 +286,21 @@ def explain(
         except Exception:
             return {}
 
-    # 1) Gather fresh local context (no external calls here)
+    # Check for required API key
+    if not openai_api_key:
+        return json.dumps({
+            "error": "openai_api_key_required", 
+            "message": "OpenAI API key is required for LLM explanations"
+        })
+
+    # Gather fresh local context (no external calls here)
     ind = _safe_json(indicators(symbol))
     evt = _safe_json(detect_events(symbol))
 
-    # 2) Build a good fallback in case LLM is unavailable or fails
-    def _fallback():
-        last = ind.get("last_close")
-        sma = ind.get("sma"); ema = ind.get("ema"); rsi = ind.get("rsi")
-        gap_up = evt.get("gap_up"); gap_down = evt.get("gap_down")
-        vspike = evt.get("vol_spike")
-        hi52 = evt.get("is_52w_high"); lo52 = evt.get("is_52w_low")
-
-        # quick interpretive templates
-        dir_sma = "above" if (last is not None and sma is not None and last >= sma) else "below"
-        dir_ema = "above" if (last is not None and ema is not None and last >= ema) else "below"
-        rsi_note = (
-            "neutral momentum" if rsi is None else
-            ("overbought-ish" if rsi >= 70 else "oversold-ish" if rsi <= 30 else "balanced momentum")
-        )
-        events = []
-        if gap_up: events.append("gap up")
-        if gap_down: events.append("gap down")
-        if vspike: events.append("volatility spike")
-        if hi52: events.append("near 52-week high")
-        if lo52: events.append("near 52-week low")
-        ev_text = (", ".join(events) if events else "no unusual session events detected")
-
-        lang_he = (language or "en").lower().startswith("he")
-        if lang_he:
-            txt = (
-                f"{symbol}: המחיר האחרון ${last:.2f}. יחסית לממוצעים נעים: "
-                f"{dir_sma} ה-SMA (${sma:.2f}), {dir_ema} ה-EMA (${ema:.2f}). RSI מצביע על {rsi_note} ({rsi:.1f}). "
-                f"אירועים: {ev_text}. אין זו המלצה להשקעה."
-            )
-        else:
-            txt = (
-                symbol + ": last close $" + f"{last:.2f}" + ". Versus moving averages: " + dir_sma + " the SMA ($" + f"{sma:.2f}" + "), " + dir_ema + " the EMA ($" + f"{ema:.2f}" + "). "
-                "RSI suggests " + rsi_note + " (" + f"{rsi:.1f}" + "). Session events: " + ev_text + ". This is not investment advice."
-            )
-
-        out = {
-            "text": txt,
-            "rationale": [
-                f"Snapshot uses last_close={last}, SMA={sma}, EMA={ema}, RSI={rsi}.",
-                f"Events flags: gap_up={gap_up}, gap_down={gap_down}, vol_spike={vspike}, 52wHigh={hi52}, 52wLow={lo52}.",
-                f"Horizon considered: ~{horizon_days} days; risk profile: {risk_profile}."
-            ],
-            "disclaimers": "Educational summary of technical signals. Not financial advice.",
-        }
-        return _json.dumps(out, ensure_ascii=False)
-
-    if not os.getenv("OPENAI_API_KEY"):
-        return _fallback()
-
-    # 3) LLM path with strict guardrails and JSON schema
+    # LLM path with strict guardrails and JSON schema
     try:
         from openai import OpenAI
-        client = OpenAI()
+        client = OpenAI(api_key=openai_api_key)
 
         # System message
         system_msg = (
@@ -408,5 +364,8 @@ def explain(
             return content
         except Exception:
             return json.dumps({"text": content or "", "disclaimers": "Not investment advice."}, ensure_ascii=False)
-    except Exception:
-        return _fallback()
+    except Exception as e:
+        return json.dumps({
+            "error": "llm_explanation_failed", 
+            "message": f"Failed to generate LLM explanation: {str(e)}"
+        })

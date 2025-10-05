@@ -1,55 +1,35 @@
 # streamlit_app.py
-import os, json, requests, pandas as pd, streamlit as st
+import json, requests, pandas as pd, streamlit as st
 
-# Load .env locally (ignored on Streamlit Cloud unless you commit it, which you won't)
-try:
-    from dotenv import load_dotenv, find_dotenv  # type: ignore
-    load_dotenv(find_dotenv(), override=False)
-except Exception:
-    pass
+# Configuration via Streamlit secrets only
 
-# --- Config helpers: prefer st.secrets, fall back to env vars ---
+# --- Config helpers: use st.secrets only ---
 def get_cfg(key: str, default: str | None = None) -> str | None:
-    # Prefer Streamlit Secrets in cloud; fallback to env/.env locally
+    # Use Streamlit Secrets only - no fallback to env vars
     if key in st.secrets:
         return st.secrets[key]
-    return os.getenv(key, default)
+    return default
 
 # --- Backend URL (default: local uvicorn) ---
 BACKEND = get_cfg("BACKEND_URL", "http://127.0.0.1:8001")
 
-# === Option B: start FastAPI (uvicorn) inside this Streamlit process if local backend is down ===
-import threading, time
-
-def _is_backend_up() -> bool:
-    try:
-        r = requests.get(f"{BACKEND}/health", timeout=2)
-        return r.ok
-    except Exception:
-        return False
-
-def _start_backend_in_thread():
-    # Run uvicorn in a daemon thread so Streamlit remains responsive
-    def runner():
-        import uvicorn
-        from api import app  # ensure api.py is in the same repo
-        uvicorn.run(app, host="127.0.0.1", port=8001, log_level="info")
-    t = threading.Thread(target=runner, daemon=True)
-    t.start()
-
-# Only auto-start if pointing to local loopback (Cloud: same container)
-if BACKEND.startswith("http://127.0.0.1"):
-    if not _is_backend_up():
-        _start_backend_in_thread()
-        # brief warmup loop
-        for _ in range(40):  # ~12s total
-            if _is_backend_up():
-                break
-            time.sleep(0.3)
+# Backend must be running externally - no auto-start fallback
 
 st.set_page_config(page_title="MCP Stocks Analyzer", page_icon="📈")
 st.title("📈 MCP + Streamlit: Stocks Analyzer")
 st.caption("Live data source: Yahoo Finance (yfinance) • Indicators & events: custom functions • Tools via MCP bridge")
+
+# OpenAI API Key input
+st.subheader("Configuration")
+openai_api_key = st.text_input(
+    "OpenAI API Key", 
+    value=st.session_state.get("openai_api_key", ""),
+    type="password",
+    help="Enter your OpenAI API key to enable LLM explanations",
+    key="openai_api_key_input"
+)
+if openai_api_key:
+    st.session_state["openai_api_key"] = openai_api_key
 
 # --- small helpers ---
 def backend_alive() -> bool:
@@ -125,7 +105,7 @@ with colS:
     if st.button("Search", type="primary"):
         st.session_state["last_query"] = q
         if not backend_alive():
-            st.error("Backend is not reachable. If running on Streamlit Cloud, the app should auto-start a local backend. If this persists, check logs and that FastAPI imports.")
+            st.error("Backend is not reachable. Please ensure the backend server is running.")
             st.session_state["results"] = []
             st.session_state["results_err"] = None
             st.session_state["raw_results"] = None
@@ -227,21 +207,28 @@ if symbol:
                 st.session_state["evt"] = res
 
     with cols[4]:
-        if st.button("Explain (LLM)"):
-            # Prefer secrets; fallback to env for local dev
-            if get_cfg("OPENAI_API_KEY"):
-                res = post_json("/explain", {"symbol": symbol}, timeout=60)
+        if st.button("LLM Explain"):
+            # Get API key from user input
+            api_key = st.session_state.get("openai_api_key", "")
+            if api_key:
+                res = post_json("/explain", {"symbol": symbol, "openai_api_key": api_key}, timeout=60)
                 st.session_state["exp"] = res
             else:
-                st.session_state["exp"] = {"text": "OPENAI_API_KEY not set."}
+                st.error("Please enter your OpenAI API key above.")
 
     with cols[5]:
         if st.button("Bundle"):
-            res = post_json(
-                "/bundle",
-                {"symbol": symbol, "lookback": int(lb), "window_sma": 20, "window_ema": 50, "window_rsi": 14},
-                timeout=45,
-            )
+            api_key = st.session_state.get("openai_api_key", "")
+            bundle_payload = {
+                "symbol": symbol, 
+                "lookback": int(lb), 
+                "window_sma": 20, 
+                "window_ema": 50, 
+                "window_rsi": 14
+            }
+            if api_key:
+                bundle_payload["openai_api_key"] = api_key
+            res = post_json("/bundle", bundle_payload, timeout=45)
             if isinstance(res, dict) and res.get("error"):
                 st.warning(f"Bundle: {res['error']}")
             else:
