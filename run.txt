@@ -1,7 +1,7 @@
 # 1) setup
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.sample .env  # add your ALPHAVANTAGE_API_KEY (and OPENAI_API_KEY if using explain)
+cp .env.sample .env  # add your OPENAI_API_KEY if using explain feature
 
 # 2) start FastAPI bridge on :8001
 uvicorn api:app --host 0.0.0.0 --port 8001 --reload

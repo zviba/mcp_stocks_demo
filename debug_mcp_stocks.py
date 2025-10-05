@@ -212,7 +212,7 @@ if __name__ == "__main__":
     
     print("\n=== RECOMMENDATIONS ===")
     if datasource_result is None:
-        print("1. Check your FINNHUB_API_KEY and yfinance installation")
+        print("1. Check your yfinance installation")
     if mcp_result is None:
         print("2. Check MCP server tool implementation")
     if api_result is None:

@@ -25,7 +25,7 @@ Quick Start
 4) Start Streamlit on :8501:
    streamlit run streamlit_app.py
 
-(There is also a `run.txt` with similar steps. It mentions `ALPHAVANTAGE_API_KEY`, but the current datasource uses Yahoo Finance via yfinance and does not require an external key.)
+(There is also a `run.txt` with similar steps.)
 
 Project Structure
 -----------------
@@ -109,7 +109,6 @@ Troubleshooting
 - **Backtest bad params** → ensure `fast < slow`.
 - **Explain returns fallback** → set `OPENAI_API_KEY` if you want LLM output; otherwise fallback is expected.
 - **CORS issues** in non‑local setups → tighten CORS in `api.py` for production.
-- **AlphaVantage mention in run.txt** → safe to ignore for current yfinance‑only flow.
 
 License
 -------
