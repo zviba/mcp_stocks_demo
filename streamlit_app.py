@@ -13,7 +13,34 @@ def get_cfg(key: str, default: str | None = None) -> str | None:
 # --- Backend URL (default: local uvicorn) ---
 BACKEND = get_cfg("BACKEND_URL", "http://127.0.0.1:8001")
 
-# Backend must be running externally - no auto-start fallback
+# === Auto-start FastAPI backend for Streamlit Cloud ===
+import threading, time
+
+def _is_backend_up() -> bool:
+    try:
+        r = requests.get(f"{BACKEND}/health", timeout=2)
+        return r.ok
+    except Exception:
+        return False
+
+def _start_backend_in_thread():
+    # Run uvicorn in a daemon thread so Streamlit remains responsive
+    def runner():
+        import uvicorn
+        from api import app  # ensure api.py is in the same repo
+        uvicorn.run(app, host="127.0.0.1", port=8001, log_level="info")
+    t = threading.Thread(target=runner, daemon=True)
+    t.start()
+
+# Only auto-start if pointing to local loopback (Cloud: same container)
+if BACKEND.startswith("http://127.0.0.1"):
+    if not _is_backend_up():
+        _start_backend_in_thread()
+        # brief warmup loop
+        for _ in range(40):  # ~12s total
+            if _is_backend_up():
+                break
+            time.sleep(0.3)
 
 st.set_page_config(page_title="MCP Stocks Analyzer", page_icon="📈")
 st.title("📈 MCP + Streamlit: Stocks Analyzer")
@@ -105,7 +132,7 @@ with colS:
     if st.button("Search", type="primary"):
         st.session_state["last_query"] = q
         if not backend_alive():
-            st.error("Backend is not reachable. Please ensure the backend server is running.")
+            st.error("Backend is not reachable. If running on Streamlit Cloud, the app should auto-start a local backend. If this persists, check logs and that FastAPI imports.")
             st.session_state["results"] = []
             st.session_state["results_err"] = None
             st.session_state["raw_results"] = None
