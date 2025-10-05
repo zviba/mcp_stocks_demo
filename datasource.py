@@ -37,6 +37,7 @@ def search_symbols(q: str, limit: int = 12) -> List[Dict[str, Any]]:
         "https://query2.finance.yahoo.com/v1/finance/search",
         "https://query1.finance.yahoo.com/v1/finance/search",  # fallback host
     ]
+    #example query: https://query2.finance.yahoo.com/v1/finance/search?q=APPL
 
     try:
         for url in hosts:
@@ -157,6 +158,7 @@ def price_series(symbol: str, interval: str = "daily", lookback: int = 180) -> p
             threads=True,
             group_by="column",   
         )
+        # Internally calls the Yahoo Finance chart API (similar to https://query1.finance.yahoo.com/v8/finance/chart/AAPL)
         print("yfinance columns:", list(hist.columns))
         print("sample rows:\n", hist.head(3))
     except Exception:
