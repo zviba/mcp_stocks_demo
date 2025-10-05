@@ -9,4 +9,5 @@ python-dotenv>=1.0
 streamlit>=1.36
 fastmcp>=0.2.5
 matplotlib
+openai>=1.0
 
