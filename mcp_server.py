@@ -91,38 +91,6 @@ def calc_cagr(price_curve: pd.Series, periods_per_year: int = 252):
     yrs = len(price_curve) / periods_per_year
     return float(ret ** (1 / yrs) - 1) if yrs > 0 else float("nan")
 
-def simple_ma_crossover(close: pd.Series, fast: int = 10, slow: int = 20) -> Dict[str, Any]:
-    """Implement and backtest a simple moving average crossover strategy.
-    
-    Args:
-        close: Series of closing prices
-        fast: Period for fast moving average (default: 10)
-        slow: Period for slow moving average (default: 20)
-        
-    Returns:
-        Dictionary containing:
-            - fast: Fast MA period used
-            - slow: Slow MA period used
-            - cagr: Compound Annual Growth Rate of strategy
-            - win_rate: Percentage of profitable trades
-            
-    Strategy:
-        - Go long when fast MA > slow MA
-        - Go flat when fast MA <= slow MA
-        - Signals are lagged by 1 period to avoid look-ahead bias
-    """
-    f = calc_sma(close, fast)
-    s = calc_sma(close, slow)
-    sig = (f > s).astype(int)  # 1=long, 0=flat
-    daily_ret = close.pct_change().fillna(0)
-    strat_ret = daily_ret * sig.shift(1).fillna(0)
-    equity = (1 + strat_ret).cumprod()
-    return {
-        "fast": fast,
-        "slow": slow,
-        "cagr": calc_cagr(equity),
-        "win_rate": float((strat_ret > 0).mean()),
-    }
 
 def flag_gaps(df: pd.DataFrame, threshold: float = 0.03) -> pd.DataFrame:
     """Identify gap up and gap down days in price data.
@@ -296,25 +264,6 @@ def detect_events(symbol: str) -> str:
     except Exception as e:
         return json.dumps({"symbol": symbol, "error": "events_failed", "message": str(e)})
 
-@mcp.tool()
-def backtest_ma_cross(symbol: str, fast: int = 10, slow: int = 20) -> str:
-    """Toy MA crossover (long-only). Returns CAGR and win rate; never raises."""
-    try:
-        if fast >= slow:
-            return json.dumps({"symbol": symbol, "error": "bad_params", "message": "fast must be < slow"})
-        df = ds_series(symbol, "daily", 600)
-        close = _coerce_close(df)
-        if close.empty:
-            return json.dumps({"symbol": symbol, "error": "no_data"})
-        stats = simple_ma_crossover(close, fast, slow)
-        stats["symbol"] = symbol
-        # Convert NaNs to None for JSON
-        for k in ("cagr", "win_rate"):
-            v = stats.get(k)
-            stats[k] = None if (v is None or (isinstance(v, float) and np.isnan(v))) else float(v)
-        return json.dumps(stats)
-    except Exception as e:
-        return json.dumps({"symbol": symbol, "error": "backtest_failed", "message": str(e)})
 
 @mcp.tool()
 def explain(

@@ -143,7 +143,7 @@ with colC:
         # also clear selection & panels
         st.session_state["symbol"] = ""
         st.session_state.pop("symbol_pick", None)
-        for k in ("quote", "series", "ind", "evt", "bt", "exp"):
+        for k in ("quote", "series", "ind", "evt", "exp"):
             st.session_state.pop(k, None)
 
 results = st.session_state.get("results") or []
@@ -192,7 +192,7 @@ if symbol:
     # Adjustable lookback for series
     lb = st.slider("Lookback (days)", min_value=90, max_value=720, value=180, step=30)
 
-    cols = st.columns(5)
+    cols = st.columns(6)
     with cols[0]:
         if st.button("Get Quote"):
             res = post_json("/quote", {"symbol": symbol})
@@ -227,6 +227,15 @@ if symbol:
                 st.session_state["evt"] = res
 
     with cols[4]:
+        if st.button("Explain (LLM)"):
+            # Prefer secrets; fallback to env for local dev
+            if get_cfg("OPENAI_API_KEY"):
+                res = post_json("/explain", {"symbol": symbol}, timeout=60)
+                st.session_state["exp"] = res
+            else:
+                st.session_state["exp"] = {"text": "OPENAI_API_KEY not set."}
+
+    with cols[5]:
         if st.button("Bundle"):
             res = post_json(
                 "/bundle",
@@ -239,26 +248,7 @@ if symbol:
                 st.session_state["series"] = res.get("series", [])
                 st.session_state["ind"] = res.get("indicators", {})
                 st.session_state["evt"] = res.get("events", {})
-
-    # Backtest row
-    f, s = st.columns(2)
-    fast = f.number_input("Fast MA", value=10, min_value=2, max_value=200, step=1)
-    slow = s.number_input("Slow MA", value=20, min_value=3, max_value=400, step=1)
-    if st.button("Backtest MA Crossover"):
-        res = post_json("/backtest", {"symbol": symbol, "fast": int(fast), "slow": int(slow)})
-        if isinstance(res, dict) and res.get("error"):
-            st.warning(f"Backtest: {res['error']}")
-        else:
-            st.session_state["bt"] = res
-
-    # Optional explain (LLM)
-    if st.button("Explain (LLM)"):
-        # Prefer secrets; fallback to env for local dev
-        if get_cfg("OPENAI_API_KEY"):
-            res = post_json("/explain", {"symbol": symbol}, timeout=60)
-            st.session_state["exp"] = res
-        else:
-            st.session_state["exp"] = {"text": "OPENAI_API_KEY not set."}
+                st.session_state["exp"] = res.get("explain", {})
 
 # --- Render panels ---
 if "quote" in st.session_state:
@@ -373,9 +363,6 @@ if "evt" in st.session_state:
     st.subheader("Events", divider="gray", help="Gap up/down, volatility spikes, 52w extremes")
     st.json(st.session_state["evt"])
 
-if "bt" in st.session_state:
-    st.subheader("Backtest: MA Crossover (toy)", divider="gray")
-    st.json(st.session_state["bt"])
 
 if "exp" in st.session_state:
     st.subheader("Explanation", divider="gray")

@@ -20,7 +20,7 @@ except Exception:
 app = FastAPI(
     title="Stocks MCP Bridge",
     version="1.0.0",
-    description="FastAPI bridge for MCP tools (Finnhub-backed): search, quote, series, indicators, events, backtest, explain.",
+    description="FastAPI bridge for MCP tools (Finnhub-backed): search, quote, series, indicators, events, explain.",
 )
 
 # Wide-open CORS for local dev / Streamlit
@@ -81,10 +81,6 @@ class IndicatorsBody(BaseModel):
 class EventsBody(BaseModel):
     symbol: str = Field(..., min_length=1)
 
-class BacktestBody(BaseModel):
-    symbol: str = Field(..., min_length=1)
-    fast: int = Field(10, ge=2, le=500)
-    slow: int = Field(20, ge=3, le=600)
 
 class ExplainBody(BaseModel):
     symbol: str = Field(..., min_length=1)
@@ -169,18 +165,6 @@ async def route_events(body: EventsBody):
     except Exception as e:
         return _error("events_failed", str(e), status=500)
 
-@app.post("/backtest")
-async def route_backtest(body: BacktestBody):
-    try:
-        if body.fast >= body.slow:
-            return _error("bad_request", "fast must be < slow", status=400)
-        t = _tools()
-        out = t.backtest_ma_cross(body.symbol, body.fast, body.slow)
-        return _ok(out)
-    except ValidationError as ve:
-        return _error("validation_error", ve.json(), status=422)
-    except Exception as e:
-        return _error("backtest_failed", str(e), status=500)
 
 @app.post("/explain")
 async def route_explain(body: ExplainBody):
@@ -195,13 +179,14 @@ async def route_explain(body: ExplainBody):
 
 @app.post("/bundle")
 async def route_bundle(body: BundleBody):
-    """Convenience: return {"series": [...], "indicators": {...}, "events": {...}}"""
+    """Convenience: return {"series": [...], "indicators": {...}, "events": {...}, "explain": {...}}"""
     try:
         t = _tools()
         series = _ok(t.price_series(body.symbol, "daily", body.lookback))
         indicators = _ok(t.indicators(body.symbol, body.window_sma, body.window_ema, body.window_rsi))
         events = _ok(t.detect_events(body.symbol))
-        return {"series": series, "indicators": indicators, "events": events}
+        explain = _ok(t.explain(body.symbol))
+        return {"series": series, "indicators": indicators, "events": events, "explain": explain}
     except ValidationError as ve:
         return _error("validation_error", ve.json(), status=422)
     except Exception as e:
