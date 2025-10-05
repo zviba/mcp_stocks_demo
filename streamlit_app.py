@@ -199,7 +199,7 @@ if symbol:
     # Adjustable lookback for series
     lb = st.slider("Lookback (days)", min_value=90, max_value=720, value=180, step=30)
 
-    cols = st.columns(6)
+    cols = st.columns([1, 1, 1, 1, 1.5, 1])
     with cols[0]:
         if st.button("Get Quote"):
             res = post_json("/quote", {"symbol": symbol})
@@ -234,7 +234,7 @@ if symbol:
                 st.session_state["evt"] = res
 
     with cols[4]:
-        if st.button("Explain"):
+        if st.button("LLM Explain"):
             # Get API key from user input
             api_key = st.session_state.get("openai_api_key", "")
             if api_key:
