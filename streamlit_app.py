@@ -1,14 +1,12 @@
 # streamlit_app.py
-import json, requests, pandas as pd, streamlit as st
+import json, os, requests, pandas as pd, streamlit as st
 
-# Configuration via Streamlit secrets only
+# Configuration via environment variables
 
-# --- Config helpers: use st.secrets only ---
+# --- Config helpers: use environment variables ---
 def get_cfg(key: str, default: str | None = None) -> str | None:
-    # Use Streamlit Secrets only - no fallback to env vars
-    if key in st.secrets:
-        return st.secrets[key]
-    return default
+    # Use environment variables instead of st.secrets
+    return os.getenv(key, default)
 
 # --- Backend URL (default: local uvicorn) ---
 BACKEND = get_cfg("BACKEND_URL", "http://127.0.0.1:8001")
