@@ -234,7 +234,7 @@ if symbol:
                 st.session_state["evt"] = res
 
     with cols[4]:
-        if st.button("LLM Explain"):
+        if st.button("Explain"):
             # Get API key from user input
             api_key = st.session_state.get("openai_api_key", "")
             if api_key:
