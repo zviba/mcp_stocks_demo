@@ -65,16 +65,30 @@ def search_symbols(q: str, limit: int = 12) -> List[Dict[str, Any]]:
                 return out  # success on this host; stop trying others
 
         # If both hosts failed or returned nothing, offer a helpful row (so Streamlit shows a message)
-        # Heuristic: if q "looks like" a ticker, propose it directly.
+        # Heuristic: if q "looks like" a ticker, propose it — but only after confirming
+        # yfinance can actually resolve it. Otherwise the user picks a phantom symbol
+        # (e.g. "NVIDIA") and every downstream call silently returns an empty series.
         import re as _re
-        if _re.fullmatch(r"[A-Za-z\.\-\^]{1,10}", q):
+        if _re.fullmatch(r"[A-Za-z\.\-\^]{1,10}", q) and _ticker_exists(q.upper()):
             return [{"symbol": q.upper(), "name": q.upper(), "region": "", "currency": ""}]
 
-        return [{"error": "no_matches", "message": f"No results for '{q}' from Yahoo search."}]
+        return [{
+            "error": "no_matches",
+            "message": f"No results for '{q}' from Yahoo search "
+                       "(the search endpoint may be rate-limited — try the exact ticker).",
+        }]
 
     except Exception as e:
         # Surface the error as a row; Streamlit already shows a warning for items containing "error"
         return [{"error": "search_failed", "message": str(e)}]
+
+def _ticker_exists(symbol: str) -> bool:
+    """Cheap sanity check that yfinance can resolve a symbol to real bars."""
+    try:
+        hist = yf.Ticker(symbol).history(period="5d", interval="1d")
+        return isinstance(hist, pd.DataFrame) and not hist.empty
+    except Exception:
+        return False
 
 # -----------------------
 # Quote (yfinance)

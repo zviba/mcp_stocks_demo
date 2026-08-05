@@ -348,7 +348,11 @@ if "series" in st.session_state:
         with st.expander("Raw series payload"):
             st.write(series_payload)
     elif df.empty or df["close"].dropna().empty or len(df) < 2:
-        st.info("No series data to plot. Try a different symbol or increase Lookback.")
+        st.info(
+            f"No series data to plot for '{symbol or '?'}'. "
+            "Yahoo returned no daily bars — make sure the selection is an exchange ticker "
+            "(e.g. NVDA), not a company name, then re-run Series."
+        )
         with st.expander("Raw series payload"):
             st.write(series_payload)
     else:

@@ -196,6 +196,16 @@ def price_series(symbol: str, interval: str = "daily", lookback: int = 180) -> s
     """OHLCV series as a JSON array (date ISO)."""
     try:
         df = ds_series(symbol, interval, lookback)
+        # An empty frame means Yahoo had nothing for this symbol (bad/delisted ticker,
+        # or a rate-limited request). Say so instead of returning [] — an empty array
+        # is indistinguishable from "plot has no points" in the UI.
+        if df is None or df.empty:
+            return json.dumps({
+                "symbol": symbol,
+                "error": "no_data",
+                "message": f"Yahoo returned no daily bars for '{symbol}'. "
+                           "Check the ticker (it must be an exchange symbol like NVDA, not a company name).",
+            })
         # Guarantee expected columns even if empty
         for col in ["date", "open", "high", "low", "close", "volume"]:
             if col not in df.columns:
