@@ -1,10 +1,13 @@
 # 1) setup
 python -m venv .venv && source .venv/bin/activate
+#   Windows (PowerShell): python -m venv .venv; .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+# NOTE: run everything via the venv's python (python -m ...). A bare `streamlit`
+# may resolve to another install (e.g. Anaconda base) with broken numpy/matplotlib.
 cp .env.sample .env  # add your OPENAI_API_KEY if using explain feature
 
 # 2) start FastAPI bridge on :8001
-uvicorn api:app --host 0.0.0.0 --port 8001 --reload
+python -m uvicorn api:app --host 0.0.0.0 --port 8001 --reload
 
 # 3) start Streamlit on :8501
-streamlit run streamlit_app.py
+python -m streamlit run streamlit_app.py

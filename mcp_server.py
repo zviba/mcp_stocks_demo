@@ -7,7 +7,11 @@ import numpy as np
 import pandas as pd
 from typing import Dict, Any
 
-from mcp.server.fastmcp import FastMCP
+# mcp 2.x renamed FastMCP -> MCPServer (mcp.server.mcpserver); keep v1 working too.
+try:
+    from mcp.server.mcpserver import MCPServer as FastMCP
+except ImportError:
+    from mcp.server.fastmcp import FastMCP
 
 # yfinance-backed datasource functions (your updated datasource.py)
 from datasource import (
